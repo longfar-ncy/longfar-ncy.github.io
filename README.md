@@ -7,5 +7,6 @@
 
 ### 学习笔记
 - [RocksDB 学习笔记](./notes/rocksdb.md)
+- [Raft 学习笔记](./notes/raft.md)
 
 ### 面试相关
