@@ -4,9 +4,11 @@
 - currentTerm: 节点最新任期
 - voteFor: 本任期内票选的Candidate索引，-1代表还没投票，leader应当投给自己
 - log[]: 日志条目
+
 ### 通用易失状态
 - commitIndex: 本节点已提交的最新日志索引
 - lastApplied: 本节点已被应用到状态机的最新日志索引
+
 ### Leader特有易失状态
 - nextIndex[]: leader要发送给follower的下一条日志的索引
 - matchIndex[]: leader已知的已经复制到follower的最新日志索引
@@ -18,9 +20,11 @@
 - candidateId: 候选人id
 - lastLogIndex: 候选人最新日志索引
 - lastLogTerm: 候选人最新日志任期号
+
 #### 回复参数
 - term: 接收方最新任期号
 - voteGranted: 接收方是否投票
+
 #### 发送方(Candidate)逻辑
 1. currentTerm++，任期号自增1
 2. voteFor = me，给自己投票
@@ -88,6 +92,3 @@
 #### 回复参数
 #### 发送方逻辑
 #### 接收方逻辑
-
-## 流程
-### 启动时
