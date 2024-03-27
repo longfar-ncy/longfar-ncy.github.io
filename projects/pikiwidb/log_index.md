@@ -24,9 +24,9 @@ pikiwidb raft 层面之下的状态机实际通过 RocksDB 做存储，RocksDB �
 
 ### 需要做的具体工作：
 1. 在运行时维护 applied log index 与 sequence number 的关系：  
-   每个 Redis 实例维护一个存放 logidx 与 seqno 映射的链表，在每次异步写成功后，在该链表后添加最新的映射—— applied log index（刚刚解析的binlog 在 braft 中的 idx）和 本次 WriteBatch 之前的 latest seqno + 1。这样就可以在 flush 时通过最大的 seqno 找到不超过该 seqno 的最新日志索引，flush 后该索引以及之前的日志操作都是 rocksdb 已经持久化过的。  
+   每个 Redis 实例维护一个存放所有列族 logidx 与 seqno 映射的链表，在每次异步写成功后，在该链表后添加最新的映射—— applied log index（刚刚解析的 binlog 在 braft 中的 idx）和 本次 WriteBatch 之前的 latest seqno + 1。这样就可以在 flush 时通过本次 flush 最大的 seqno 找到不超过该 seqno 的最新日志索引，flush 成功后就可以确认该索引以及之前的日志操作都是 rocksdb 已经持久化过的。  
    出于性能考虑，并不会每次都添加新映射，而是有一定周期地更新。
-3. Flush 时将 sequence number 和 log index 一同存入 SST 文件：  
+2. Flush 时将 log index 存入 SST 文件：  
    （存seqno只是为了debug，未来可删去）这里通过 rocksdb table property 特性，在每次 Flush 时将本列族的 logidx 与 seqno  的映射持久化到 SST 文件；具体来说，每次 Flush 时会对每个 key 遍历检查，我们可以保存最大的 seqno，最后利用最大的 seqno 在上述维持 seqno 与 logidx 的链表中，找到不大于该 seqno 的最大 seqno 与 logidx 的映射，这个映射中的 logidx 就是本次持久化对应的已知最新的 logidx，然后将该 logidx 写入SST，以供重启时提取。
 
    > 例如：Log100(Seq200, Seq201) , Log101(Seq202, Seq203)  
@@ -35,8 +35,8 @@ pikiwidb raft 层面之下的状态机实际通过 RocksDB 做存储，RocksDB �
    > - 如果周期为2，假设 Log100 添加到链表中，Log101 没有添加到链表中，Log102(Seq204...) 添加到链表中。那么 Seq200-203 都应当找到 100:200 映射，然后将 100 写入 SST，Seq204 及以后的应当找到 102:204。
 
 3. 在每次 Flush 完后，需要清理该链表：  
-   通过 rocksdb 提供的 event listener 特性实现，在每次 flush 完毕后触发清理操作，清理掉链表中已经持久化的最新映射之前的映射。
-   > 例如：链表中已经有 100:200 102:204 两个映射   
+   通过 rocksdb 提供的 event listener 特性实现，在每次 flush 完毕后触发清理操作，清理掉链表中已经持久化的最新映射之前的映射，主要要保留已持久化的最新的映射。
+   > 例如：链表中已经有 100:200->102:204 两个映射   
    > - 当我们 flush 的最大 seqno 为 200-203 时，持久化 Log100，它之前没有别的映射，所以不能删除映射
    > - 当我们 flush 的最大 seqno >= 204 时，持久化 Log102，就可以删除 100:200 这个映射
 
